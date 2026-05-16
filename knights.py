@@ -96,7 +96,7 @@ def render(occupied, spiral, pad=4):
 
 def main():
     n   = int(sys.argv[1]) if len(sys.argv) > 1 else 500
-    out = sys.argv[2]       if len(sys.argv) > 2 else 'knights.png'
+    out = sys.argv[2]       if len(sys.argv) > 2 else f'knights-{n}.png'
 
     # Precompute enough of the spiral.  At step k there are at most k/2
     # opposite knights, each attacking ≤8 squares, so max position ≤5k.
