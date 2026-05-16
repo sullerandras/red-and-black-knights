@@ -230,6 +230,36 @@ canvas {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
+
+/* ── Gallery ── */
+#gallerySection { display: none; flex-direction: column; gap: 10px; width: 100%; }
+#gallerySection.show { display: flex; }
+#galleryStatus { font-size: 11px; color: #8b949e; min-height: 1.4em; }
+#galleryGrid { display: grid; gap: 2px; }
+.gal-col-hdr {
+  font-size: 9px; color: #6e7681; text-align: center;
+  writing-mode: vertical-rl; transform: rotate(180deg);
+  overflow: hidden; white-space: nowrap; max-height: 72px; align-self: end;
+}
+.gal-row-hdr {
+  font-size: 9px; color: #6e7681; text-align: right; padding-right: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 60px; align-self: center;
+}
+.gal-cell {
+  width: 72px; height: 72px; position: relative;
+  border: 1px solid #21262d; border-radius: 2px;
+  background: #161b22; cursor: pointer; overflow: hidden;
+}
+.gal-cell:hover { border-color: #58a6ff; box-shadow: 0 0 0 1px #58a6ff; z-index: 1; }
+.gal-cell canvas { display: block; }
+.gal-cell-tip {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: rgba(13,17,23,0.88); color: #c9d1d9; font-size: 8px;
+  text-align: center; padding: 2px; opacity: 0; transition: opacity 0.15s;
+  line-height: 1.4;
+}
+.gal-cell:hover .gal-cell-tip { opacity: 1; }
 </style>
 </head>
 <body>
@@ -323,6 +353,14 @@ canvas {
 
   <button id="btnExport" disabled>↓ Export PNG</button>
 
+  <hr>
+
+  <div class="field">
+    <span class="field-label">Gallery N (per thumbnail)</span>
+    <input type="number" id="galleryN" min="1000" max="500000" value="20000">
+  </div>
+  <button id="btnGallery">▦ Gallery</button>
+
   <div style="margin-top:auto; padding-top:8px; font-size:10px; color:#484f58;">v<span id="versionLabel"></span></div>
 </div>
 
@@ -330,6 +368,10 @@ canvas {
   <div id="info">Configure parameters and click Generate.</div>
   <div id="canvasWrap">
     <canvas id="canvas" width="1" height="1"></canvas>
+  </div>
+  <div id="gallerySection">
+    <div id="galleryStatus"></div>
+    <div id="galleryGrid"></div>
   </div>
 </div>
 
@@ -866,6 +908,216 @@ function readParams() {
 }
 
 document.getElementById('versionLabel').textContent = VERSION;
+
+// ── Gallery ──
+let galAbort = false;
+let galActiveWorkers = [];
+
+function shortName(label) {
+  return label.replace(/\s*[(\[].*/, '').replace(/…$/, '').trim();
+}
+
+function renderThumbToCanvas(thumbCanvas, msg, colors, layout, bgHex) {
+  const { xs, ys, teams } = msg;
+  const n = xs.length;
+  if (!n) return;
+  let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+  for (let i=0;i<n;i++) {
+    if(xs[i]<x0)x0=xs[i]; if(xs[i]>x1)x1=xs[i];
+    if(ys[i]<y0)y0=ys[i]; if(ys[i]>y1)y1=ys[i];
+  }
+  const W=x1-x0+1, H=y1-y0+1;
+  if(W<=0||H<=0) return;
+  const off=document.createElement('canvas');
+  off.width=W; off.height=H;
+  const offCtx=off.getContext('2d');
+  const imgData=offCtx.createImageData(W,H);
+  const d=imgData.data;
+  const [br,bg,bb]=hexToRGB(bgHex||'#ffffff');
+  for(let i=0;i<d.length;i+=4){d[i]=br;d[i+1]=bg;d[i+2]=bb;d[i+3]=255;}
+  const flipY=(layout==='spiral');
+  const cRGBs=colors.map(hexToRGB);
+  for(let i=0;i<n;i++){
+    const[r,g,b]=cRGBs[teams[i]];
+    const px=xs[i]-x0;
+    const py=flipY?(y1-ys[i]):(ys[i]-y0);
+    const idx=(py*W+px)*4;
+    d[idx]=r;d[idx+1]=g;d[idx+2]=b;d[idx+3]=255;
+  }
+  offCtx.putImageData(imgData,0,0);
+  const tw=thumbCanvas.width,th=thumbCanvas.height;
+  const scale=Math.min(tw/W,th/H);
+  const dw=Math.round(W*scale),dh=Math.round(H*scale);
+  const dx=Math.round((tw-dw)/2),dy=Math.round((th-dh)/2);
+  const tc=thumbCanvas.getContext('2d');
+  tc.fillStyle=bgHex||'#ffffff';
+  tc.fillRect(0,0,tw,th);
+  tc.imageSmoothingEnabled=false;
+  tc.drawImage(off,0,0,W,H,dx,dy,dw,dh);
+}
+
+function startGalleryWorker(n,numTeams,layout,zigzagWidth,sequential,teamMoves) {
+  return new Promise((resolve,reject)=>{
+    const blob=new Blob([WORKER_SRC],{type:'application/javascript'});
+    const url=URL.createObjectURL(blob);
+    const w=new Worker(url);
+    URL.revokeObjectURL(url);
+    galActiveWorkers.push(w);
+    w.onmessage=e=>{
+      if(e.data.type==='done'){
+        galActiveWorkers=galActiveWorkers.filter(x=>x!==w);
+        w.terminate();
+        resolve(e.data);
+      }
+    };
+    w.onerror=e=>{
+      galActiveWorkers=galActiveWorkers.filter(x=>x!==w);
+      w.terminate();
+      reject(e);
+    };
+    w.postMessage({n,numTeams,layout,zigzagWidth,sequential,teamMoves});
+  });
+}
+
+async function runConcurrent(tasks, limit) {
+  let i=0;
+  const run=async()=>{ while(i<tasks.length&&!galAbort){await tasks[i++]();} };
+  await Promise.all(Array.from({length:limit},run));
+}
+
+document.getElementById('btnGallery').addEventListener('click', async function() {
+  const galSection=document.getElementById('gallerySection');
+  const galStatus=document.getElementById('galleryStatus');
+  const galGrid=document.getElementById('galleryGrid');
+
+  // Stop if running
+  if(galActiveWorkers.length>0){
+    galAbort=true;
+    galActiveWorkers.forEach(w=>w.terminate());
+    galActiveWorkers=[];
+    this.textContent='▦ Gallery';
+    galStatus.textContent='Stopped.';
+    return;
+  }
+
+  // Close if already showing
+  if(galSection.classList.contains('show')){
+    galSection.classList.remove('show');
+    document.getElementById('canvasWrap').style.display='';
+    document.getElementById('info').textContent='';
+    this.textContent='▦ Gallery';
+    return;
+  }
+
+  // Start gallery
+  galAbort=false;
+  const numTeams=+numTeamsEl.value;
+  const layout=layoutEl.value;
+  const zigzagWidth=Math.max(2,+document.getElementById('zigzagWidth').value||300);
+  const sequential=document.getElementById('sequential').checked;
+  const galN=Math.max(1000,Math.min(500000,+document.getElementById('galleryN').value||20000));
+  const bgHex=document.getElementById('bgColor').value;
+  const colors=Array.from({length:numTeams},(_,i)=>document.getElementById(`tc${i}`)?.value||DEFAULT_COLORS[i]);
+
+  // All named piece types (rows = T1, cols = T2, T3+ stay fixed at current)
+  const pt=PIECES.filter(p=>p.value!=='custom');
+
+  const combos=[];
+  for(const rp of pt){
+    for(const cp of pt){
+      const pieceValues=Array.from({length:numTeams},(_,t)=>{
+        if(t===0) return rp.value;
+        if(t===1) return cp.value;
+        return document.getElementById(`pc${t}`)?.value||'knight';
+      });
+      const teamMoves=pieceValues.map(pv=>{
+        if(pv==='custom') return leaperMoves(1,2);
+        return PIECES.find(p=>p.value===pv)?.gen?.()??leaperMoves(1,2);
+      });
+      combos.push({pieceValues,teamMoves,rp,cp});
+    }
+  }
+
+  // Switch to gallery view
+  document.getElementById('canvasWrap').style.display='none';
+  galSection.classList.add('show');
+  document.getElementById('info').textContent='';
+  this.textContent='■ Stop Gallery';
+
+  // Build grid: [label col] + [13 piece cols]
+  galGrid.innerHTML='';
+  galGrid.style.gridTemplateColumns=`60px repeat(${pt.length},72px)`;
+
+  // Header row: empty corner + column (T2) labels
+  galGrid.appendChild(document.createElement('div'));
+  for(const cp of pt){
+    const hdr=document.createElement('div');
+    hdr.className='gal-col-hdr';
+    hdr.textContent=shortName(cp.label);
+    galGrid.appendChild(hdr);
+  }
+
+  // Data rows: row (T1) label + cells
+  for(let ri=0;ri<pt.length;ri++){
+    const rp=pt[ri];
+    const rowLbl=document.createElement('div');
+    rowLbl.className='gal-row-hdr';
+    rowLbl.textContent=shortName(rp.label);
+    galGrid.appendChild(rowLbl);
+    for(let ci=0;ci<pt.length;ci++){
+      const combo=combos[ri*pt.length+ci];
+      const cell=document.createElement('div');
+      cell.className='gal-cell';
+      const tc=document.createElement('canvas');
+      tc.width=72; tc.height=72;
+      const tip=document.createElement('div');
+      tip.className='gal-cell-tip';
+      tip.textContent=`T1: ${shortName(combo.rp.label)}\nT2: ${shortName(combo.cp.label)}`;
+      cell.append(tc,tip);
+      cell.addEventListener('click',()=>{
+        for(let t=0;t<numTeams;t++){
+          const sel=document.getElementById(`pc${t}`);
+          if(sel&&combo.pieceValues[t]) sel.value=combo.pieceValues[t];
+        }
+        galSection.classList.remove('show');
+        document.getElementById('canvasWrap').style.display='';
+        document.getElementById('info').textContent='Config applied — click Generate.';
+        document.getElementById('btnGallery').textContent='▦ Gallery';
+      });
+      combo.cell=cell;
+      combo.thumbCanvas=tc;
+      galGrid.appendChild(cell);
+    }
+  }
+
+  // Run all workers with concurrency 4
+  let doneCount=0;
+  galStatus.textContent=`Generating 0/${combos.length} thumbnails (N=${galN.toLocaleString()})…`;
+
+  const tasks=combos.map(combo=>async()=>{
+    if(galAbort) return;
+    try{
+      const msg=await startGalleryWorker(galN,numTeams,layout,zigzagWidth,sequential,combo.teamMoves);
+      if(!galAbort){
+        renderThumbToCanvas(combo.thumbCanvas,msg,colors,layout,bgHex);
+        doneCount++;
+        galStatus.textContent=`${doneCount}/${combos.length} thumbnails ready`;
+      }
+    }catch(e){
+      if(!galAbort) console.warn('gallery:',e);
+    }
+  });
+
+  await runConcurrent(tasks,4);
+
+  if(!galAbort){
+    galStatus.textContent=`${combos.length} thumbnails — click any to apply config, or click ▦ Gallery to close`;
+    this.textContent='▦ Gallery';
+  } else {
+    galAbort=false;
+    this.textContent='▦ Gallery';
+  }
+});
 </script>
 
 </body>
