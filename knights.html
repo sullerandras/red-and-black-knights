@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Knights on an Infinite Board</title>
+<title>Piece Patterns on an Infinite Board</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -19,7 +19,7 @@ body {
 
 /* ── Sidebar ── */
 #sidebar {
-  width: 264px;
+  width: 272px;
   flex-shrink: 0;
   background: #161b22;
   border-right: 1px solid #30363d;
@@ -66,20 +66,44 @@ input[type=number], select {
 }
 input[type=number]:focus, select:focus { border-color: #58a6ff; }
 
-/* Team swatches */
-#teamColorsWrap {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+/* ── Per-team rows ── */
+#teamsWrap { display: flex; flex-direction: column; gap: 6px; }
+
+.team-row {
+  display: flex;
+  align-items: center;
   gap: 6px;
 }
-.swatch {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
+.team-row input[type=color] {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  padding: 1px;
+}
+.team-row select { flex: 1 1 0; min-width: 0; width: auto; }
+.team-label {
   font-size: 10px;
   color: #8b949e;
+  white-space: nowrap;
+  flex-shrink: 0;
+  width: 18px;
+  text-align: right;
 }
+
+.custom-ab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding-left: 32px;
+  margin-top: 2px;
+}
+.custom-ab span { color: #6e7681; font-size: 11px; flex-shrink: 0; }
+.custom-ab input[type=number] {
+  width: 44px;
+  padding: 4px 6px;
+  text-align: center;
+}
+
 input[type=color] {
   -webkit-appearance: none;
   width: 38px;
@@ -95,7 +119,6 @@ input[type=color]:hover { border-color: #58a6ff; }
 
 hr { border: none; border-top: 1px solid #21262d; }
 
-/* bg color full width */
 .color-full {
   -webkit-appearance: none;
   width: 100%;
@@ -150,14 +173,12 @@ progress {
 #btnExport:hover:not(:disabled) { border-color: #58a6ff; color: #58a6ff; }
 #btnExport:disabled { opacity: 0.35; cursor: not-allowed; }
 
-/* layout description */
 #layoutDesc {
   font-size: 11px;
   color: #6e7681;
   line-height: 1.5;
 }
 
-/* sequential toggle */
 .toggle-row {
   display: flex;
   align-items: flex-start;
@@ -214,10 +235,10 @@ canvas {
 <body>
 
 <div id="sidebar">
-  <h1>♞ Knights</h1>
+  <h1>♟ Piece Patterns</h1>
 
   <div class="field">
-    <span class="field-label">Knights (N)</span>
+    <span class="field-label">Pieces (N)</span>
     <div class="n-row">
       <input type="range" id="nRange" min="100" max="500000" step="100" value="10000">
       <input type="number" id="nNum" min="100" max="10000000" value="10000">
@@ -236,8 +257,8 @@ canvas {
   </div>
 
   <div class="field">
-    <span class="field-label">Team Colors</span>
-    <div id="teamColorsWrap"></div>
+    <span class="field-label">Team Colors &amp; Pieces</span>
+    <div id="teamsWrap"></div>
   </div>
 
   <hr>
@@ -262,7 +283,7 @@ canvas {
       <input type="checkbox" id="sequential">
       <span class="toggle-body">
         <span class="toggle-title">Sequential placement</span>
-        <span class="toggle-desc">Each team must place its knight strictly after the last-placed knight's position, not its own personal lowest available.</span>
+        <span class="toggle-desc">Each team must place its piece strictly after the last-placed piece's position, not its own personal lowest available.</span>
       </span>
     </label>
   </div>
@@ -316,7 +337,6 @@ canvas {
 // ─────────────────────────────────────────────
 const WORKER_SRC = `
 'use strict';
-const KNIGHT_MOVES = [[1,2],[1,-2],[-1,2],[-1,-2],[2,1],[2,-1],[-2,1],[-2,-1]];
 
 // ── Center Spiral (right=+x, up=+y, origin=center) ──
 function spiralXY(n) {
@@ -342,8 +362,7 @@ function xyToSpiral(x, y) {
   return m - 7*k + y - 1;
 }
 
-// ── Corner Diagonal (anti-diagonal from top-left, x+y=const) ──
-// n=0→(0,0), n=1→(1,0), n=2→(0,1), n=3→(2,0), n=4→(1,1), n=5→(0,2), ...
+// ── Corner Diagonal (anti-diagonal from top-left) ──
 function diagXY(n) {
   const d = Math.floor((-1 + Math.sqrt(1 + 8*n)) / 2);
   const p = n - Math.floor(d*(d+1)/2);
@@ -368,7 +387,7 @@ function xyToZigzag(x, y, W) {
 
 // ── Simulation ──
 self.onmessage = function(ev) {
-  const { n, numTeams, layout, zigzagWidth, sequential } = ev.data;
+  const { n, numTeams, layout, zigzagWidth, sequential, teamMoves } = ev.data;
 
   let posToXY, xyToPos;
   if (layout === 'spiral') {
@@ -383,13 +402,12 @@ self.onmessage = function(ev) {
     xyToPos = (x, y) => xyToZigzag(x, y, W);
   }
 
-  // occupied: Map pos→teamIdx, attackedBy: one Set per team
   const occupied   = new Map();
   const attackedBy = Array.from({length: numTeams}, () => new Set());
   const nextPos    = new Array(numTeams).fill(0);
-  let   globalMin  = 0; // only enforced when sequential=true
+  let   globalMin  = 0;
 
-  const posArr  = new Float64Array(n); // positions placed
+  const posArr  = new Float64Array(n);
   const teamArr = new Uint8Array(n);
 
   const REPORT = 25000;
@@ -397,10 +415,8 @@ self.onmessage = function(ev) {
 
   for (let step = 0; step < n; step++) {
     const team = step % numTeams;
-    // sequential: each placement must come after the previous one globally
     let pos = sequential ? Math.max(nextPos[team], globalMin) : nextPos[team];
 
-    // find smallest unoccupied, unattacked position
     outer: for (;;) {
       if (!occupied.has(pos)) {
         for (let t = 0; t < numTeams; t++) {
@@ -418,7 +434,7 @@ self.onmessage = function(ev) {
     teamArr[step] = team;
 
     const [x, y] = posToXY(pos);
-    for (const [dx, dy] of KNIGHT_MOVES) {
+    for (const [dx, dy] of teamMoves[team]) {
       const ap = xyToPos(x + dx, y + dy);
       if (ap >= 0) attackedBy[team].add(ap);
     }
@@ -429,7 +445,6 @@ self.onmessage = function(ev) {
     }
   }
 
-  // Convert positions → coordinates
   const xs = new Int32Array(n);
   const ys = new Int32Array(n);
   for (let i = 0; i < n; i++) {
@@ -456,46 +471,150 @@ const LAYOUT_DESC = {
   zigzag:   'Rows left-to-right then right-to-left (boustrophedon), starting at the top-left. Set the row width below.',
 };
 
-// ── DOM refs ──
-const numTeamsEl     = document.getElementById('numTeams');
-const teamColorsWrap = document.getElementById('teamColorsWrap');
-const nRange         = document.getElementById('nRange');
-const nNum           = document.getElementById('nNum');
-const layoutEl       = document.getElementById('layout');
-const layoutDesc     = document.getElementById('layoutDesc');
-const zigzagWidthField = document.getElementById('zigzagWidthField');
-const btnGenerate    = document.getElementById('btnGenerate');
-const btnExport      = document.getElementById('btnExport');
-const progressWrap   = document.getElementById('progressWrap');
-const progressBar    = document.getElementById('progressBar');
-const progressText   = document.getElementById('progressText');
-const info           = document.getElementById('info');
-const canvas         = document.getElementById('canvas');
-const ctx            = canvas.getContext('2d');
+// ── Move generators ──
+function leaperMoves(a, b) {
+  const seen = new Set();
+  const moves = [];
+  function add(x, y) {
+    if (x === 0 && y === 0) return;
+    const k = `${x},${y}`;
+    if (!seen.has(k)) { seen.add(k); moves.push([x, y]); }
+  }
+  for (const sa of [1, -1]) for (const sb of [1, -1]) {
+    add(sa * a, sb * b);
+    if (a !== b) add(sa * b, sb * a);
+  }
+  return moves;
+}
+function bishopMoves(range) {
+  const m = [];
+  for (let d = 1; d <= range; d++) m.push([d,d],[d,-d],[-d,d],[-d,-d]);
+  return m;
+}
+function rookMoves(range) {
+  const m = [];
+  for (let d = 1; d <= range; d++) m.push([d,0],[-d,0],[0,d],[0,-d]);
+  return m;
+}
+function queenMoves(range) { return [...rookMoves(range), ...bishopMoves(range)]; }
 
-// ── Team color swatches ──
-function rebuildSwatches(n) {
-  // preserve existing color values
-  const existing = Array.from({length: 6}, (_, i) => {
-    const el = document.getElementById(`tc${i}`);
-    return el ? el.value : DEFAULT_COLORS[i] || '#888888';
-  });
-  teamColorsWrap.innerHTML = '';
+// ── Piece presets ──
+const PIECES = [
+  { value: 'knight',   label: 'Knight (1+2)',        gen: () => leaperMoves(1, 2) },
+  { value: 'camel',    label: 'Camel (1+3)',          gen: () => leaperMoves(1, 3) },
+  { value: 'zebra',    label: 'Zebra (2+3)',           gen: () => leaperMoves(2, 3) },
+  { value: 'giraffe',  label: 'Giraffe (1+4)',         gen: () => leaperMoves(1, 4) },
+  { value: 'leaper34', label: 'Leaper (3+4)',          gen: () => leaperMoves(3, 4) },
+  { value: 'alfil',    label: 'Alfil (2+2)',            gen: () => leaperMoves(2, 2) },
+  { value: 'dabbaba',  label: 'Dabbaba (2+0)',          gen: () => leaperMoves(2, 0) },
+  { value: 'ferz',     label: 'Ferz / Bishop×1',        gen: () => leaperMoves(1, 1) },
+  { value: 'wazir',    label: 'Wazir / Rook×1',         gen: () => leaperMoves(1, 0) },
+  { value: 'king',     label: 'King (8 neighbors)',      gen: () => queenMoves(1) },
+  { value: 'bishop2',  label: 'Bishop ≤2 steps',        gen: () => bishopMoves(2) },
+  { value: 'rook2',    label: 'Rook ≤2 steps',          gen: () => rookMoves(2) },
+  { value: 'queen2',   label: 'Queen ≤2 steps',         gen: () => queenMoves(2) },
+  { value: 'custom',   label: 'Custom (a+b)…',          gen: null },
+];
+
+// ── DOM refs ──
+const numTeamsEl       = document.getElementById('numTeams');
+const teamsWrap        = document.getElementById('teamsWrap');
+const nRange           = document.getElementById('nRange');
+const nNum             = document.getElementById('nNum');
+const layoutEl         = document.getElementById('layout');
+const layoutDesc       = document.getElementById('layoutDesc');
+const zigzagWidthField = document.getElementById('zigzagWidthField');
+const btnGenerate      = document.getElementById('btnGenerate');
+const btnExport        = document.getElementById('btnExport');
+const progressWrap     = document.getElementById('progressWrap');
+const progressBar      = document.getElementById('progressBar');
+const progressText     = document.getElementById('progressText');
+const info             = document.getElementById('info');
+const canvas           = document.getElementById('canvas');
+const ctx              = canvas.getContext('2d');
+
+// ── Team rows (color + piece type per team) ──
+function rebuildTeams(n) {
+  const existing = Array.from({length: 6}, (_, i) => ({
+    color: document.getElementById(`tc${i}`)?.value ?? (DEFAULT_COLORS[i] ?? '#888888'),
+    piece: document.getElementById(`pc${i}`)?.value ?? 'knight',
+    pa:    document.getElementById(`pa${i}`)?.value ?? '1',
+    pb:    document.getElementById(`pb${i}`)?.value ?? '2',
+  }));
+  teamsWrap.innerHTML = '';
   for (let i = 0; i < n; i++) {
-    const wrap = document.createElement('div');
-    wrap.className = 'swatch';
-    const inp = document.createElement('input');
-    inp.type = 'color';
-    inp.value = existing[i] || DEFAULT_COLORS[i] || '#888888';
-    inp.id = `tc${i}`;
+    const { color, piece, pa, pb } = existing[i];
+
+    const container = document.createElement('div');
+
+    const row = document.createElement('div');
+    row.className = 'team-row';
+
+    const colorInp = document.createElement('input');
+    colorInp.type = 'color';
+    colorInp.value = color;
+    colorInp.id = `tc${i}`;
+
     const lbl = document.createElement('span');
-    lbl.textContent = `Team ${i+1}`;
-    wrap.append(inp, lbl);
-    teamColorsWrap.appendChild(wrap);
+    lbl.className = 'team-label';
+    lbl.textContent = `T${i+1}`;
+
+    const sel = document.createElement('select');
+    sel.id = `pc${i}`;
+    for (const p of PIECES) {
+      const opt = document.createElement('option');
+      opt.value = p.value;
+      opt.textContent = p.label;
+      if (p.value === piece) opt.selected = true;
+      sel.appendChild(opt);
+    }
+
+    row.append(colorInp, lbl, sel);
+
+    // Custom a+b inputs, shown only when "custom" is selected
+    const customDiv = document.createElement('div');
+    customDiv.className = 'custom-ab';
+    customDiv.id = `ca${i}`;
+    customDiv.style.display = piece === 'custom' ? '' : 'none';
+
+    const paInp = document.createElement('input');
+    paInp.type = 'number'; paInp.id = `pa${i}`;
+    paInp.min = '0'; paInp.max = '20'; paInp.value = pa;
+
+    const sep = document.createElement('span');
+    sep.textContent = '+';
+
+    const pbInp = document.createElement('input');
+    pbInp.type = 'number'; pbInp.id = `pb${i}`;
+    pbInp.min = '0'; pbInp.max = '20'; pbInp.value = pb;
+
+    const customLabel = document.createElement('span');
+    customLabel.textContent = 'leaper';
+
+    customDiv.append(paInp, sep, pbInp, customLabel);
+
+    sel.addEventListener('change', () => {
+      customDiv.style.display = sel.value === 'custom' ? '' : 'none';
+    });
+
+    container.append(row, customDiv);
+    teamsWrap.appendChild(container);
   }
 }
-rebuildSwatches(2);
-numTeamsEl.addEventListener('change', () => rebuildSwatches(+numTeamsEl.value));
+rebuildTeams(2);
+numTeamsEl.addEventListener('change', () => rebuildTeams(+numTeamsEl.value));
+
+// ── Compute move set for a team from current UI state ──
+function getTeamMoves(i) {
+  const piece = document.getElementById(`pc${i}`)?.value ?? 'knight';
+  if (piece === 'custom') {
+    const a = Math.max(0, +document.getElementById(`pa${i}`)?.value || 0);
+    const b = Math.max(0, +document.getElementById(`pb${i}`)?.value || 0);
+    return leaperMoves(a, b);
+  }
+  const preset = PIECES.find(p => p.value === piece);
+  return preset?.gen ? preset.gen() : leaperMoves(1, 2);
+}
 
 // ── N sync ──
 nRange.addEventListener('input', () => { nNum.value = nRange.value; });
@@ -539,12 +658,13 @@ btnGenerate.addEventListener('click', () => {
   const layout      = layoutEl.value;
   const zigzagWidth = Math.max(2, +document.getElementById('zigzagWidth').value || 300);
   const sequential  = document.getElementById('sequential').checked;
+  const teamMoves   = Array.from({length: numTeams}, (_, i) => getTeamMoves(i));
 
   setRunning(true);
   btnExport.disabled = true;
   progressBar.value = 0;
   progressText.textContent = 'Starting…';
-  info.textContent = `Computing ${n.toLocaleString()} knights…`;
+  info.textContent = `Computing ${n.toLocaleString()} pieces…`;
 
   const blob = new Blob([WORKER_SRC], { type: 'application/javascript' });
   const url  = URL.createObjectURL(blob);
@@ -572,7 +692,7 @@ btnGenerate.addEventListener('click', () => {
     info.textContent = `Error: ${e.message}`;
   };
 
-  worker.postMessage({ n, numTeams, layout, zigzagWidth, sequential });
+  worker.postMessage({ n, numTeams, layout, zigzagWidth, sequential, teamMoves });
 });
 
 // ── Render ──
@@ -584,7 +704,6 @@ function render(msg, n, numTeams, layout) {
   const colors = Array.from({length: numTeams}, (_, i) =>
     hexToRGB(document.getElementById(`tc${i}`)?.value || DEFAULT_COLORS[i]));
 
-  // bounding box
   let x0=Infinity, x1=-Infinity, y0=Infinity, y1=-Infinity;
   for (let i = 0; i < n; i++) {
     if (xs[i] < x0) x0 = xs[i];
@@ -596,7 +715,7 @@ function render(msg, n, numTeams, layout) {
   const W = (x1 - x0 + 1 + 2*pad) * cs;
   const H = (y1 - y0 + 1 + 2*pad) * cs;
 
-  const MAX_PX = 256 * 1024 * 1024; // ~256 MP safety cap
+  const MAX_PX = 256 * 1024 * 1024;
   if (W * H > MAX_PX) {
     info.textContent =
       `Canvas too large (${W}×${H} = ${(W*H/1e6).toFixed(0)} MP). Reduce N or cell size.`;
@@ -610,14 +729,12 @@ function render(msg, n, numTeams, layout) {
   const imgData = ctx.createImageData(W, H);
   const data    = imgData.data;
 
-  // Fill background
   const [br, bg, bb] = bgRGB;
   for (let i = 0; i < data.length; i += 4) {
     data[i]=br; data[i+1]=bg; data[i+2]=bb; data[i+3]=255;
   }
 
-  // For spiral: mathematical y-axis (+y = up) → flip.
-  // For diagonal / zigzag: y=0 at top → no flip.
+  // Spiral uses mathematical y-axis (+y=up), so flip vertically.
   const flipY = (layout === 'spiral');
 
   for (let i = 0; i < n; i++) {
@@ -642,14 +759,14 @@ function render(msg, n, numTeams, layout) {
   ctx.putImageData(imgData, 0, 0);
 
   info.textContent =
-    `${n.toLocaleString()} knights · ${W}×${H} px · computed in ${fmtMs(elapsed)}`;
+    `${n.toLocaleString()} pieces · ${W}×${H} px · computed in ${fmtMs(elapsed)}`;
   btnExport.disabled = false;
 }
 
 // ── Export ──
 btnExport.addEventListener('click', () => {
   const link = document.createElement('a');
-  link.download = `knights-${nNum.value}.png`;
+  link.download = `pieces-${nNum.value}.png`;
   link.href = canvas.toDataURL('image/png');
   link.click();
 });
