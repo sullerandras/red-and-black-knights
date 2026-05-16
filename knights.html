@@ -801,23 +801,29 @@ function fmtMs(ms) {
 // ── URL deep-linking ──
 function updateURL() {
   const numTeams = +numTeamsEl.value;
-  const p = new URLSearchParams();
-  p.set('n', nNum.value);
-  p.set('teams', numTeams);
+  const teamEntries = [];
   for (let i = 0; i < numTeams; i++) {
-    p.set(`c${i}`, (document.getElementById(`tc${i}`)?.value || DEFAULT_COLORS[i]).slice(1));
+    const color = (document.getElementById(`tc${i}`)?.value || DEFAULT_COLORS[i]).slice(1);
     const piece = document.getElementById(`pc${i}`)?.value || 'knight';
-    p.set(`p${i}`, piece);
-    p.set(`a${i}`, document.getElementById(`pa${i}`)?.value || '1');
-    p.set(`b${i}`, document.getElementById(`pb${i}`)?.value || '2');
+    if (piece === 'custom') {
+      const a = document.getElementById(`pa${i}`)?.value || '1';
+      const b = document.getElementById(`pb${i}`)?.value || '2';
+      teamEntries.push(`${color}:custom:${a}:${b}`);
+    } else {
+      teamEntries.push(`${color}:${piece}`);
+    }
   }
-  p.set('layout', layoutEl.value);
-  p.set('zw', document.getElementById('zigzagWidth').value);
-  p.set('seq', document.getElementById('sequential').checked ? '1' : '0');
-  p.set('cs', document.getElementById('cellSize').value);
-  p.set('bg', document.getElementById('bgColor').value.slice(1));
-  p.set('pad', document.getElementById('padding').value);
-  history.replaceState(null, '', '?' + p.toString());
+  const qs = [
+    `n=${nNum.value}`,
+    `teams=${teamEntries.join(',')}`,
+    `layout=${layoutEl.value}`,
+    `zw=${document.getElementById('zigzagWidth').value}`,
+    `seq=${document.getElementById('sequential').checked ? '1' : '0'}`,
+    `cs=${document.getElementById('cellSize').value}`,
+    `bg=${document.getElementById('bgColor').value.slice(1)}`,
+    `pad=${document.getElementById('padding').value}`,
+  ].join('&');
+  history.replaceState(null, '', '?' + qs);
 }
 
 function readParams() {
@@ -828,15 +834,19 @@ function readParams() {
   nNum.value = n;
   nRange.value = Math.min(n, 500000);
 
-  const numTeams = Math.min(6, Math.max(2, +p.get('teams') || 2));
+  const teamEntries = (p.get('teams') || '').split(',').filter(Boolean);
+  const numTeams = Math.min(6, Math.max(2, teamEntries.length || 2));
   numTeamsEl.value = numTeams;
 
-  const teamData = Array.from({length: 6}, (_, i) => ({
-    color: p.has(`c${i}`) ? '#' + p.get(`c${i}`) : DEFAULT_COLORS[i],
-    piece: p.get(`p${i}`) || 'knight',
-    pa:    p.get(`a${i}`) || '1',
-    pb:    p.get(`b${i}`) || '2',
-  }));
+  const teamData = Array.from({length: 6}, (_, i) => {
+    const parts = (teamEntries[i] || '').split(':');
+    return {
+      color: parts[0] ? '#' + parts[0] : DEFAULT_COLORS[i],
+      piece: parts[1] || 'knight',
+      pa:    parts[2] || '1',
+      pb:    parts[3] || '2',
+    };
+  });
   rebuildTeams(numTeams, teamData);
 
   layoutEl.value = p.get('layout') || 'spiral';
