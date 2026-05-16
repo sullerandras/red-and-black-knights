@@ -260,6 +260,15 @@ canvas {
   line-height: 1.4;
 }
 .gal-cell:hover .gal-cell-tip { opacity: 1; }
+
+#galPreview {
+  position: fixed; display: none; z-index: 200;
+  background: #161b22; border: 1px solid #58a6ff; border-radius: 6px;
+  padding: 6px; box-shadow: 0 8px 28px rgba(0,0,0,0.7);
+  pointer-events: none;
+}
+#galPreview canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+#galPreviewLabel { font-size: 10px; color: #8b949e; text-align: center; margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -372,6 +381,10 @@ canvas {
   <div id="gallerySection">
     <div id="galleryStatus"></div>
     <div id="galleryGrid"></div>
+  </div>
+  <div id="galPreview">
+    <canvas id="galPreviewCanvas"></canvas>
+    <div id="galPreviewLabel"></div>
   </div>
 </div>
 
@@ -954,6 +967,7 @@ function renderThumbToCanvas(thumbCanvas, msg, colors, layout, bgHex) {
   tc.fillRect(0,0,tw,th);
   tc.imageSmoothingEnabled=false;
   tc.drawImage(off,0,0,W,H,dx,dy,dw,dh);
+  return off;
 }
 
 function startGalleryWorker(n,numTeams,layout,zigzagWidth,sequential,teamMoves) {
@@ -1080,9 +1094,37 @@ document.getElementById('btnGallery').addEventListener('click', async function()
           if(sel&&combo.pieceValues[t]) sel.value=combo.pieceValues[t];
         }
         galSection.classList.remove('show');
+        document.getElementById('galPreview').style.display='none';
         document.getElementById('canvasWrap').style.display='';
         document.getElementById('info').textContent='Config applied — click Generate.';
         document.getElementById('btnGallery').textContent='▦ Gallery';
+      });
+      cell.addEventListener('mouseenter',()=>{
+        if(!combo.offCanvas) return;
+        const preview=document.getElementById('galPreview');
+        const pc=document.getElementById('galPreviewCanvas');
+        const lbl=document.getElementById('galPreviewLabel');
+        const W=combo.offCanvas.width, H=combo.offCanvas.height;
+        const maxSize=350;
+        const scale=maxSize/Math.max(W,H);
+        const dw=Math.round(W*scale), dh=Math.round(H*scale);
+        pc.width=dw; pc.height=dh;
+        const pctx=pc.getContext('2d');
+        pctx.imageSmoothingEnabled=false;
+        pctx.drawImage(combo.offCanvas,0,0,W,H,0,0,dw,dh);
+        lbl.textContent=`T1: ${shortName(combo.rp.label)} · T2: ${shortName(combo.cp.label)}`;
+        const rect=cell.getBoundingClientRect();
+        const pw=dw+14, ph=dh+34;
+        let left=rect.right+8;
+        if(left+pw>window.innerWidth) left=rect.left-pw-8;
+        let top=rect.top;
+        if(top+ph>window.innerHeight) top=window.innerHeight-ph-8;
+        preview.style.left=`${Math.max(8,left)}px`;
+        preview.style.top=`${Math.max(8,top)}px`;
+        preview.style.display='block';
+      });
+      cell.addEventListener('mouseleave',()=>{
+        document.getElementById('galPreview').style.display='none';
       });
       combo.cell=cell;
       combo.thumbCanvas=tc;
@@ -1099,7 +1141,7 @@ document.getElementById('btnGallery').addEventListener('click', async function()
     try{
       const msg=await startGalleryWorker(galN,numTeams,layout,zigzagWidth,sequential,combo.teamMoves);
       if(!galAbort){
-        renderThumbToCanvas(combo.thumbCanvas,msg,colors,layout,bgHex);
+        combo.offCanvas=renderThumbToCanvas(combo.thumbCanvas,msg,colors,layout,bgHex);
         doneCount++;
         galStatus.textContent=`${doneCount}/${combos.length} thumbnails ready`;
       }
