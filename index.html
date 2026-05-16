@@ -520,7 +520,7 @@ self.onmessage = function(ev) {
 // ─────────────────────────────────────────────
 //  Main app
 // ─────────────────────────────────────────────
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 
 const DEFAULT_COLORS = ['#111111','#d41f1f','#1f6ad4','#1db84a','#9b1fd4','#e07b1f'];
 
@@ -1098,6 +1098,7 @@ document.getElementById('btnGallery').addEventListener('click', async function()
         document.getElementById('canvasWrap').style.display='';
         document.getElementById('info').textContent='Config applied — click Generate.';
         document.getElementById('btnGallery').textContent='▦ Gallery';
+        updateURL();
       });
       cell.addEventListener('mouseenter',()=>{
         if(!combo.offCanvas) return;
