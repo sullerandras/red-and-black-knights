@@ -240,8 +240,8 @@ canvas {
   <div class="field">
     <span class="field-label">Pieces (N)</span>
     <div class="n-row">
-      <input type="range" id="nRange" min="100" max="500000" step="100" value="10000">
-      <input type="number" id="nNum" min="100" max="10000000" value="10000">
+      <input type="range" id="nRange" min="100" max="500000" step="100" value="500000">
+      <input type="number" id="nNum" min="100" max="10000000" value="500000">
     </div>
   </div>
 
@@ -834,7 +834,7 @@ function readParams() {
   const p = new URLSearchParams(location.search);
   if (!p.size) return false;
 
-  const n = Math.max(100, +p.get('n') || 10000);
+  const n = Math.max(100, +p.get('n') || 500000);
   nNum.value = n;
   nRange.value = Math.min(n, 500000);
 
