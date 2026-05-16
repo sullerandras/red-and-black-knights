@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Knights on an Infinite Board</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background: #0d1117;
+  color: #c9d1d9;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+}
+
+/* ── Sidebar ── */
+#sidebar {
+  width: 264px;
+  flex-shrink: 0;
+  background: #161b22;
+  border-right: 1px solid #30363d;
+  padding: 16px 14px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+#sidebar h1 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #f0f6fc;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #30363d;
+  letter-spacing: 0.2px;
+}
+
+.field { display: flex; flex-direction: column; gap: 5px; }
+
+.field-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.n-row { display: flex; gap: 6px; align-items: center; }
+.n-row input[type=range] { flex: 1; accent-color: #58a6ff; cursor: pointer; }
+.n-row input[type=number] { width: 82px; }
+
+input[type=number], select {
+  padding: 5px 8px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #c9d1d9;
+  font-size: 12px;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s;
+}
+input[type=number]:focus, select:focus { border-color: #58a6ff; }
+
+/* Team swatches */
+#teamColorsWrap {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: #8b949e;
+}
+input[type=color] {
+  -webkit-appearance: none;
+  width: 38px;
+  height: 30px;
+  border: 2px solid #30363d;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+  padding: 2px;
+  transition: border-color 0.15s;
+}
+input[type=color]:hover { border-color: #58a6ff; }
+
+hr { border: none; border-top: 1px solid #21262d; }
+
+/* bg color full width */
+.color-full {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 30px;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+  padding: 2px;
+}
+.color-full:hover { border-color: #58a6ff; }
+
+#btnGenerate {
+  padding: 9px;
+  background: #238636;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  letter-spacing: 0.3px;
+}
+#btnGenerate:hover:not(:disabled) { background: #2ea043; }
+#btnGenerate.stopping { background: #b91c1c; }
+#btnGenerate.stopping:hover { background: #dc2626; }
+#btnGenerate:disabled { background: #21262d; color: #6e7681; cursor: not-allowed; }
+
+#progressWrap { display: none; flex-direction: column; gap: 4px; }
+#progressWrap.show { display: flex; }
+progress {
+  width: 100%;
+  height: 5px;
+  border-radius: 3px;
+  border: none;
+  accent-color: #58a6ff;
+  overflow: hidden;
+}
+#progressText { font-size: 10.5px; color: #8b949e; }
+
+#btnExport {
+  padding: 7px;
+  background: transparent;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+#btnExport:hover:not(:disabled) { border-color: #58a6ff; color: #58a6ff; }
+#btnExport:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* layout description */
+#layoutDesc {
+  font-size: 11px;
+  color: #6e7681;
+  line-height: 1.5;
+}
+
+/* ── Main canvas area ── */
+#main {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 20px;
+  gap: 10px;
+  background: #0d1117;
+}
+
+#info {
+  font-size: 11px;
+  color: #8b949e;
+  min-height: 1.4em;
+  flex-shrink: 0;
+}
+
+#canvasWrap {
+  border: 1px solid #21262d;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+canvas {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h1>♞ Knights</h1>
+
+  <div class="field">
+    <span class="field-label">Knights (N)</span>
+    <div class="n-row">
+      <input type="range" id="nRange" min="100" max="500000" step="100" value="10000">
+      <input type="number" id="nNum" min="100" max="10000000" value="10000">
+    </div>
+  </div>
+
+  <div class="field">
+    <span class="field-label">Teams</span>
+    <select id="numTeams">
+      <option value="2" selected>2 teams</option>
+      <option value="3">3 teams</option>
+      <option value="4">4 teams</option>
+      <option value="5">5 teams</option>
+      <option value="6">6 teams</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <span class="field-label">Team Colors</span>
+    <div id="teamColorsWrap"></div>
+  </div>
+
+  <hr>
+
+  <div class="field">
+    <span class="field-label">Layout</span>
+    <select id="layout">
+      <option value="spiral">Center Spiral</option>
+      <option value="diagonal">Corner Diagonal</option>
+      <option value="zigzag">Zigzag Rows</option>
+    </select>
+    <span id="layoutDesc"></span>
+  </div>
+
+  <div class="field" id="zigzagWidthField" style="display:none">
+    <span class="field-label">Zigzag Width (cells)</span>
+    <input type="number" id="zigzagWidth" min="5" max="100000" value="300">
+  </div>
+
+  <hr>
+
+  <div class="field">
+    <span class="field-label">Cell Size</span>
+    <select id="cellSize">
+      <option value="1" selected>1 px — most detail</option>
+      <option value="2">2 px</option>
+      <option value="3">3 px</option>
+      <option value="4">4 px</option>
+      <option value="6">6 px</option>
+      <option value="8">8 px</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <span class="field-label">Background</span>
+    <input type="color" class="color-full" id="bgColor" value="#ffffff">
+  </div>
+
+  <div class="field">
+    <span class="field-label">Padding (cells)</span>
+    <input type="number" id="padding" min="0" max="200" value="4">
+  </div>
+
+  <hr>
+
+  <button id="btnGenerate">▶ Generate</button>
+
+  <div id="progressWrap">
+    <progress id="progressBar" max="100" value="0"></progress>
+    <span id="progressText">Starting…</span>
+  </div>
+
+  <button id="btnExport" disabled>↓ Export PNG</button>
+</div>
+
+<div id="main">
+  <div id="info">Configure parameters and click Generate.</div>
+  <div id="canvasWrap">
+    <canvas id="canvas" width="1" height="1"></canvas>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+//  Web Worker source (inlined as blob URL)
+// ─────────────────────────────────────────────
+const WORKER_SRC = `
+'use strict';
+const KNIGHT_MOVES = [[1,2],[1,-2],[-1,2],[-1,-2],[2,1],[2,-1],[-2,1],[-2,-1]];
+
+// ── Center Spiral (right=+x, up=+y, origin=center) ──
+function spiralXY(n) {
+  if (n === 0) return [0, 0];
+  const n1 = n + 1;
+  const k = (Math.floor(Math.sqrt(n1 - 1)) + 1) >> 1;
+  let m = (2*k+1)*(2*k+1);
+  const t = 2*k;
+  if (n1 >= m - t) return [k - (m - n1), -k];
+  m -= t;
+  if (n1 >= m - t) return [-k, -k + (m - n1)];
+  m -= t;
+  if (n1 >= m - t) return [-k + (m - n1), k];
+  return [k, k - (m - n1 - t)];
+}
+function xyToSpiral(x, y) {
+  if (x === 0 && y === 0) return 0;
+  const k = Math.max(Math.abs(x), Math.abs(y));
+  const m = (2*k+1)*(2*k+1);
+  if (y === -k) return m - k + x - 1;
+  if (x === -k) return m - 3*k - y - 1;
+  if (y ===  k) return m - 5*k - x - 1;
+  return m - 7*k + y - 1;
+}
+
+// ── Corner Diagonal (anti-diagonal from top-left, x+y=const) ──
+// n=0→(0,0), n=1→(1,0), n=2→(0,1), n=3→(2,0), n=4→(1,1), n=5→(0,2), ...
+function diagXY(n) {
+  const d = Math.floor((-1 + Math.sqrt(1 + 8*n)) / 2);
+  const p = n - Math.floor(d*(d+1)/2);
+  return [d - p, p];
+}
+function xyToDiag(x, y) {
+  if (x < 0 || y < 0) return -1;
+  const d = x + y;
+  return Math.floor(d*(d+1)/2) + y;
+}
+
+// ── Zigzag rows (boustrophedon, origin top-left) ──
+function zigzagXY(n, W) {
+  const row = Math.floor(n / W);
+  const col = n % W;
+  return [(row & 1) ? W - 1 - col : col, row];
+}
+function xyToZigzag(x, y, W) {
+  if (x < 0 || x >= W || y < 0) return -1;
+  return y * W + ((y & 1) ? W - 1 - x : x);
+}
+
+// ── Simulation ──
+self.onmessage = function(ev) {
+  const { n, numTeams, layout, zigzagWidth } = ev.data;
+
+  let posToXY, xyToPos;
+  if (layout === 'spiral') {
+    posToXY = spiralXY;
+    xyToPos = xyToSpiral;
+  } else if (layout === 'diagonal') {
+    posToXY = diagXY;
+    xyToPos = xyToDiag;
+  } else {
+    const W = zigzagWidth;
+    posToXY = (p) => zigzagXY(p, W);
+    xyToPos = (x, y) => xyToZigzag(x, y, W);
+  }
+
+  // occupied: Map pos→teamIdx, attackedBy: one Set per team
+  const occupied   = new Map();
+  const attackedBy = Array.from({length: numTeams}, () => new Set());
+  const nextPos    = new Array(numTeams).fill(0);
+
+  const posArr  = new Float64Array(n); // positions placed
+  const teamArr = new Uint8Array(n);
+
+  const REPORT = 25000;
+  const t0 = Date.now();
+
+  for (let step = 0; step < n; step++) {
+    const team = step % numTeams;
+    let pos = nextPos[team];
+
+    // find smallest unoccupied, unattacked position
+    outer: for (;;) {
+      if (!occupied.has(pos)) {
+        for (let t = 0; t < numTeams; t++) {
+          if (t !== team && attackedBy[t].has(pos)) { pos++; continue outer; }
+        }
+        break;
+      }
+      pos++;
+    }
+
+    occupied.set(pos, team);
+    nextPos[team] = pos + 1;
+    posArr[step]  = pos;
+    teamArr[step] = team;
+
+    const [x, y] = posToXY(pos);
+    for (const [dx, dy] of KNIGHT_MOVES) {
+      const ap = xyToPos(x + dx, y + dy);
+      if (ap >= 0) attackedBy[team].add(ap);
+    }
+
+    if (step > 0 && step % REPORT === 0) {
+      const elapsed = Date.now() - t0;
+      self.postMessage({ type: 'progress', done: step, total: n, elapsed });
+    }
+  }
+
+  // Convert positions → coordinates
+  const xs = new Int32Array(n);
+  const ys = new Int32Array(n);
+  for (let i = 0; i < n; i++) {
+    const [x, y] = posToXY(posArr[i]);
+    xs[i] = x;
+    ys[i] = y;
+  }
+
+  self.postMessage(
+    { type: 'done', xs, ys, teams: teamArr, elapsed: Date.now() - t0 },
+    [xs.buffer, ys.buffer, teamArr.buffer]
+  );
+};
+`;
+
+// ─────────────────────────────────────────────
+//  Main app
+// ─────────────────────────────────────────────
+const DEFAULT_COLORS = ['#111111','#d41f1f','#1f6ad4','#1db84a','#9b1fd4','#e07b1f'];
+
+const LAYOUT_DESC = {
+  spiral:   'Numbers cells outward from the center in a square spiral.',
+  diagonal: 'Numbers cells along anti-diagonals from the top-left corner. Produces a triangular region.',
+  zigzag:   'Rows left-to-right then right-to-left (boustrophedon), starting at the top-left. Set the row width below.',
+};
+
+// ── DOM refs ──
+const numTeamsEl     = document.getElementById('numTeams');
+const teamColorsWrap = document.getElementById('teamColorsWrap');
+const nRange         = document.getElementById('nRange');
+const nNum           = document.getElementById('nNum');
+const layoutEl       = document.getElementById('layout');
+const layoutDesc     = document.getElementById('layoutDesc');
+const zigzagWidthField = document.getElementById('zigzagWidthField');
+const btnGenerate    = document.getElementById('btnGenerate');
+const btnExport      = document.getElementById('btnExport');
+const progressWrap   = document.getElementById('progressWrap');
+const progressBar    = document.getElementById('progressBar');
+const progressText   = document.getElementById('progressText');
+const info           = document.getElementById('info');
+const canvas         = document.getElementById('canvas');
+const ctx            = canvas.getContext('2d');
+
+// ── Team color swatches ──
+function rebuildSwatches(n) {
+  // preserve existing color values
+  const existing = Array.from({length: 6}, (_, i) => {
+    const el = document.getElementById(`tc${i}`);
+    return el ? el.value : DEFAULT_COLORS[i] || '#888888';
+  });
+  teamColorsWrap.innerHTML = '';
+  for (let i = 0; i < n; i++) {
+    const wrap = document.createElement('div');
+    wrap.className = 'swatch';
+    const inp = document.createElement('input');
+    inp.type = 'color';
+    inp.value = existing[i] || DEFAULT_COLORS[i] || '#888888';
+    inp.id = `tc${i}`;
+    const lbl = document.createElement('span');
+    lbl.textContent = `Team ${i+1}`;
+    wrap.append(inp, lbl);
+    teamColorsWrap.appendChild(wrap);
+  }
+}
+rebuildSwatches(2);
+numTeamsEl.addEventListener('change', () => rebuildSwatches(+numTeamsEl.value));
+
+// ── N sync ──
+nRange.addEventListener('input', () => { nNum.value = nRange.value; });
+nNum.addEventListener('input', () => {
+  const v = Math.max(100, Math.min(10_000_000, +nNum.value || 100));
+  nRange.value = Math.min(v, 500_000);
+});
+
+// ── Layout description + zigzag width visibility ──
+function updateLayoutUI() {
+  layoutDesc.textContent = LAYOUT_DESC[layoutEl.value];
+  zigzagWidthField.style.display = layoutEl.value === 'zigzag' ? '' : 'none';
+}
+layoutEl.addEventListener('change', updateLayoutUI);
+updateLayoutUI();
+
+// ── Worker state ──
+let worker = null;
+let running = false;
+
+function setRunning(yes) {
+  running = yes;
+  btnGenerate.textContent = yes ? '■ Stop' : '▶ Generate';
+  btnGenerate.classList.toggle('stopping', yes);
+  if (yes) progressWrap.classList.add('show');
+  else     progressWrap.classList.remove('show');
+}
+
+// ── Generate / Stop ──
+btnGenerate.addEventListener('click', () => {
+  if (running) {
+    worker?.terminate();
+    worker = null;
+    setRunning(false);
+    info.textContent = 'Stopped.';
+    return;
+  }
+
+  const n          = Math.max(1, +nNum.value || 1000);
+  const numTeams   = +numTeamsEl.value;
+  const layout     = layoutEl.value;
+  const zigzagWidth = Math.max(2, +document.getElementById('zigzagWidth').value || 300);
+
+  setRunning(true);
+  btnExport.disabled = true;
+  progressBar.value = 0;
+  progressText.textContent = 'Starting…';
+  info.textContent = `Computing ${n.toLocaleString()} knights…`;
+
+  const blob = new Blob([WORKER_SRC], { type: 'application/javascript' });
+  const url  = URL.createObjectURL(blob);
+  worker = new Worker(url);
+  URL.revokeObjectURL(url);
+
+  worker.onmessage = (e) => {
+    const msg = e.data;
+    if (msg.type === 'progress') {
+      const pct = Math.round(msg.done / msg.total * 100);
+      progressBar.value = pct;
+      const eta = (msg.elapsed / msg.done) * (msg.total - msg.done);
+      progressText.textContent =
+        `${pct}%  ·  ${fmtMs(msg.elapsed)} elapsed  ·  ~${fmtMs(eta)} left`;
+    } else if (msg.type === 'done') {
+      worker = null;
+      setRunning(false);
+      render(msg, n, numTeams, layout);
+    }
+  };
+
+  worker.onerror = (e) => {
+    worker = null;
+    setRunning(false);
+    info.textContent = `Error: ${e.message}`;
+  };
+
+  worker.postMessage({ n, numTeams, layout, zigzagWidth });
+});
+
+// ── Render ──
+function render(msg, n, numTeams, layout) {
+  const { xs, ys, teams, elapsed } = msg;
+  const cs  = +document.getElementById('cellSize').value;
+  const pad = Math.max(0, +document.getElementById('padding').value || 0);
+  const bgRGB = hexToRGB(document.getElementById('bgColor').value);
+  const colors = Array.from({length: numTeams}, (_, i) =>
+    hexToRGB(document.getElementById(`tc${i}`)?.value || DEFAULT_COLORS[i]));
+
+  // bounding box
+  let x0=Infinity, x1=-Infinity, y0=Infinity, y1=-Infinity;
+  for (let i = 0; i < n; i++) {
+    if (xs[i] < x0) x0 = xs[i];
+    if (xs[i] > x1) x1 = xs[i];
+    if (ys[i] < y0) y0 = ys[i];
+    if (ys[i] > y1) y1 = ys[i];
+  }
+
+  const W = (x1 - x0 + 1 + 2*pad) * cs;
+  const H = (y1 - y0 + 1 + 2*pad) * cs;
+
+  const MAX_PX = 256 * 1024 * 1024; // ~256 MP safety cap
+  if (W * H > MAX_PX) {
+    info.textContent =
+      `Canvas too large (${W}×${H} = ${(W*H/1e6).toFixed(0)} MP). Reduce N or cell size.`;
+    btnExport.disabled = false;
+    return;
+  }
+
+  canvas.width  = W;
+  canvas.height = H;
+
+  const imgData = ctx.createImageData(W, H);
+  const data    = imgData.data;
+
+  // Fill background
+  const [br, bg, bb] = bgRGB;
+  for (let i = 0; i < data.length; i += 4) {
+    data[i]=br; data[i+1]=bg; data[i+2]=bb; data[i+3]=255;
+  }
+
+  // For spiral: mathematical y-axis (+y = up) → flip.
+  // For diagonal / zigzag: y=0 at top → no flip.
+  const flipY = (layout === 'spiral');
+
+  for (let i = 0; i < n; i++) {
+    const [r, g, b] = colors[teams[i]];
+    const px = (xs[i] - x0 + pad) * cs;
+    const py = flipY
+      ? (y1 - ys[i] + pad) * cs
+      : (ys[i] - y0 + pad) * cs;
+    if (cs === 1) {
+      const idx = (py * W + px) * 4;
+      data[idx]=r; data[idx+1]=g; data[idx+2]=b; data[idx+3]=255;
+    } else {
+      for (let dy = 0; dy < cs; dy++) {
+        for (let dx = 0; dx < cs; dx++) {
+          const idx = ((py+dy)*W + (px+dx)) * 4;
+          data[idx]=r; data[idx+1]=g; data[idx+2]=b; data[idx+3]=255;
+        }
+      }
+    }
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+
+  info.textContent =
+    `${n.toLocaleString()} knights · ${W}×${H} px · computed in ${fmtMs(elapsed)}`;
+  btnExport.disabled = false;
+}
+
+// ── Export ──
+btnExport.addEventListener('click', () => {
+  const link = document.createElement('a');
+  link.download = `knights-${nNum.value}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+});
+
+// ── Utilities ──
+function hexToRGB(hex) {
+  return [
+    parseInt(hex.slice(1,3), 16),
+    parseInt(hex.slice(3,5), 16),
+    parseInt(hex.slice(5,7), 16),
+  ];
+}
+
+function fmtMs(ms) {
+  if (ms < 1000)  return `${Math.round(ms)} ms`;
+  if (ms < 60000) return `${(ms/1000).toFixed(1)} s`;
+  return `${Math.floor(ms/60000)} m ${Math.round((ms%60000)/1000)} s`;
+}
+</script>
+
+</body>
+</html>
