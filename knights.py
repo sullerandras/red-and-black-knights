@@ -39,29 +39,33 @@ def make_spiral(size):
 
 def play(n, spiral):
     """Place n alternating knights (black first).  Returns {pos: 'B'|'R'}."""
-    xy_to_n  = {xy: i for i, xy in enumerate(spiral)}
-    occupied = {}
-    black_pos, red_pos = set(), set()
+    xy_to_n       = {xy: i for i, xy in enumerate(spiral)}
+    occupied      = {}
+    attacked_by_black: set = set()
+    attacked_by_red:   set = set()
+    next_b = next_r = 0
     is_black = True
 
     for _ in range(n):
-        opposite = red_pos if is_black else black_pos
-
-        attacked = set()
-        for p in opposite:
-            ox, oy = spiral[p]
-            for dx, dy in KNIGHT_MOVES:
-                q = xy_to_n.get((ox + dx, oy + dy))
-                if q is not None:
-                    attacked.add(q)
-
-        pos = 0
-        while pos in occupied or pos in attacked:
+        blocked = attacked_by_red if is_black else attacked_by_black
+        pos = next_b if is_black else next_r
+        while pos in occupied or pos in blocked:
             pos += 1
 
         color = 'B' if is_black else 'R'
         occupied[pos] = color
-        (black_pos if is_black else red_pos).add(pos)
+        if is_black:
+            next_b = pos + 1
+        else:
+            next_r = pos + 1
+
+        x, y = spiral[pos]
+        target = attacked_by_black if is_black else attacked_by_red
+        for dx, dy in KNIGHT_MOVES:
+            q = xy_to_n.get((x + dx, y + dy))
+            if q is not None:
+                target.add(q)
+
         is_black = not is_black
 
     return occupied
@@ -96,7 +100,7 @@ def main():
 
     # Precompute enough of the spiral.  At step k there are at most k/2
     # opposite knights, each attacking ≤8 squares, so max position ≤5k.
-    spiral_size = n * 8 + 500
+    spiral_size = n * 10 + 500
     spiral = make_spiral(spiral_size)
 
     print(f"Playing {n} knights …")
