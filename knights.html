@@ -157,6 +157,26 @@ progress {
   line-height: 1.5;
 }
 
+/* sequential toggle */
+.toggle-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.toggle-row input[type=checkbox] {
+  width: 15px;
+  height: 15px;
+  margin-top: 1px;
+  flex-shrink: 0;
+  accent-color: #58a6ff;
+  cursor: pointer;
+}
+.toggle-body { display: flex; flex-direction: column; gap: 2px; }
+.toggle-title { font-size: 12px; color: #c9d1d9; font-weight: 500; }
+.toggle-desc  { font-size: 10.5px; color: #6e7681; line-height: 1.45; }
+
 /* ── Main canvas area ── */
 #main {
   flex: 1;
@@ -235,6 +255,16 @@ canvas {
   <div class="field" id="zigzagWidthField" style="display:none">
     <span class="field-label">Zigzag Width (cells)</span>
     <input type="number" id="zigzagWidth" min="5" max="100000" value="300">
+  </div>
+
+  <div class="field">
+    <label class="toggle-row">
+      <input type="checkbox" id="sequential">
+      <span class="toggle-body">
+        <span class="toggle-title">Sequential placement</span>
+        <span class="toggle-desc">Each team must place its knight strictly after the last-placed knight's position, not its own personal lowest available.</span>
+      </span>
+    </label>
   </div>
 
   <hr>
@@ -338,7 +368,7 @@ function xyToZigzag(x, y, W) {
 
 // ── Simulation ──
 self.onmessage = function(ev) {
-  const { n, numTeams, layout, zigzagWidth } = ev.data;
+  const { n, numTeams, layout, zigzagWidth, sequential } = ev.data;
 
   let posToXY, xyToPos;
   if (layout === 'spiral') {
@@ -357,6 +387,7 @@ self.onmessage = function(ev) {
   const occupied   = new Map();
   const attackedBy = Array.from({length: numTeams}, () => new Set());
   const nextPos    = new Array(numTeams).fill(0);
+  let   globalMin  = 0; // only enforced when sequential=true
 
   const posArr  = new Float64Array(n); // positions placed
   const teamArr = new Uint8Array(n);
@@ -366,7 +397,8 @@ self.onmessage = function(ev) {
 
   for (let step = 0; step < n; step++) {
     const team = step % numTeams;
-    let pos = nextPos[team];
+    // sequential: each placement must come after the previous one globally
+    let pos = sequential ? Math.max(nextPos[team], globalMin) : nextPos[team];
 
     // find smallest unoccupied, unattacked position
     outer: for (;;) {
@@ -381,6 +413,7 @@ self.onmessage = function(ev) {
 
     occupied.set(pos, team);
     nextPos[team] = pos + 1;
+    if (sequential) globalMin = pos + 1;
     posArr[step]  = pos;
     teamArr[step] = team;
 
@@ -501,10 +534,11 @@ btnGenerate.addEventListener('click', () => {
     return;
   }
 
-  const n          = Math.max(1, +nNum.value || 1000);
-  const numTeams   = +numTeamsEl.value;
-  const layout     = layoutEl.value;
+  const n           = Math.max(1, +nNum.value || 1000);
+  const numTeams    = +numTeamsEl.value;
+  const layout      = layoutEl.value;
   const zigzagWidth = Math.max(2, +document.getElementById('zigzagWidth').value || 300);
+  const sequential  = document.getElementById('sequential').checked;
 
   setRunning(true);
   btnExport.disabled = true;
@@ -538,7 +572,7 @@ btnGenerate.addEventListener('click', () => {
     info.textContent = `Error: ${e.message}`;
   };
 
-  worker.postMessage({ n, numTeams, layout, zigzagWidth });
+  worker.postMessage({ n, numTeams, layout, zigzagWidth, sequential });
 });
 
 // ── Render ──
