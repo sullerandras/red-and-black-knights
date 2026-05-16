@@ -15,32 +15,45 @@ Usage:  python knights.py [N=500] [output.png]
 Needs:  pip install Pillow
 """
 
-import sys
+import sys, math
 
 KNIGHT_MOVES = [(1,2),(1,-2),(-1,2),(-1,-2),(2,1),(2,-1),(-2,1),(-2,-1)]
-_DIRS        = [(1,0),(0,1),(-1,0),(0,-1)]   # R, U, L, D
 
 
-def make_spiral(size):
-    """Return list of (x,y) for positions 0 … size-1."""
-    coords = [(0, 0)]
-    x = y = 0
-    seg, rem = 0, 1          # segment index, steps remaining in segment
-    while len(coords) < size:
-        dx, dy = _DIRS[seg % 4]
-        x += dx; y += dy
-        coords.append((x, y))
-        rem -= 1
-        if rem == 0:
-            seg += 1
-            rem = seg // 2 + 1   # segment lengths: 1,1,2,2,3,3,…
-    return coords
+def spiral_xy(n):
+    """(x, y) for 0-indexed spiral position n — O(1), no precomputation."""
+    if n == 0:
+        return (0, 0)
+    n1 = n + 1
+    k  = (math.isqrt(n1 - 1) + 1) // 2
+    m  = (2 * k + 1) ** 2
+    t  = 2 * k
+    if n1 >= m - t:
+        return (k - (m - n1), -k)
+    m -= t
+    if n1 >= m - t:
+        return (-k, -k + (m - n1))
+    m -= t
+    if n1 >= m - t:
+        return (-k + (m - n1), k)
+    return (k, k - (m - n1 - t))
 
 
-def play(n, spiral):
+def xy_to_spiral(x, y):
+    """0-indexed spiral position for coordinates (x, y) — O(1)."""
+    if x == 0 and y == 0:
+        return 0
+    k = max(abs(x), abs(y))
+    m = (2 * k + 1) ** 2
+    if   y == -k: return m - k + x - 1
+    elif x == -k: return m - 3 * k - y - 1
+    elif y ==  k: return m - 5 * k - x - 1
+    else:         return m - 7 * k + y - 1  # x == k
+
+
+def play(n):
     """Place n alternating knights (black first).  Returns {pos: 'B'|'R'}."""
-    xy_to_n       = {xy: i for i, xy in enumerate(spiral)}
-    occupied      = {}
+    occupied           = {}
     attacked_by_black: set = set()
     attacked_by_red:   set = set()
     next_b = next_r = 0
@@ -59,26 +72,24 @@ def play(n, spiral):
         else:
             next_r = pos + 1
 
-        x, y = spiral[pos]
+        x, y = spiral_xy(pos)
         target = attacked_by_black if is_black else attacked_by_red
         for dx, dy in KNIGHT_MOVES:
-            q = xy_to_n.get((x + dx, y + dy))
-            if q is not None:
-                target.add(q)
+            target.add(xy_to_spiral(x + dx, y + dy))
 
         is_black = not is_black
 
     return occupied
 
 
-def render(occupied, spiral, pad=4):
+def render(occupied, pad=4):
     from PIL import Image
 
-    hi = max(occupied)
-    xs = [spiral[i][0] for i in range(hi + 1)]
-    ys = [spiral[i][1] for i in range(hi + 1)]
-    x0, x1 = min(xs), max(xs)
-    y0, y1 = min(ys), max(ys)
+    coords = {pos: spiral_xy(pos) for pos in occupied}
+    all_x  = [c[0] for c in coords.values()]
+    all_y  = [c[1] for c in coords.values()]
+    x0, x1 = min(all_x), max(all_x)
+    y0, y1 = min(all_y), max(all_y)
 
     w = x1 - x0 + 1 + 2 * pad
     h = y1 - y0 + 1 + 2 * pad
@@ -86,7 +97,7 @@ def render(occupied, spiral, pad=4):
     pix = img.load()
 
     for pos, color in occupied.items():
-        x, y = spiral[pos]
+        x, y = coords[pos]
         ix = x - x0 + pad
         iy = y1 - y + pad          # flip y: image row 0 = top
         pix[ix, iy] = (0, 0, 0) if color == 'B' else (210, 30, 30)
@@ -98,16 +109,11 @@ def main():
     n   = int(sys.argv[1]) if len(sys.argv) > 1 else 500
     out = sys.argv[2]       if len(sys.argv) > 2 else f'knights-{n}.png'
 
-    # Precompute enough of the spiral.  At step k there are at most k/2
-    # opposite knights, each attacking ≤8 squares, so max position ≤5k.
-    spiral_size = n * 10 + 500
-    spiral = make_spiral(spiral_size)
-
     print(f"Playing {n} knights …")
-    occ = play(n, spiral)
+    occ = play(n)
 
     print("Rendering …")
-    img = render(occ, spiral)
+    img = render(occ)
     img.save(out)
     print(f"Saved {out}  ({img.width}×{img.height} px, highest position {max(occ)})")
 
