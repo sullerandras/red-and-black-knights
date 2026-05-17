@@ -39,4 +39,4 @@ Teams take turns placing pieces. Each piece lands on the lowest-numbered unoccup
 
 The black regions are all connected!
 
-[![Zebra (2+3) and bishop (<=2), 1M pieces](examples/zebra-bishop-1000000.png)](https://sullerandras.github.io/red-and-black-knights/?n=1000000&teams=111111:zebra,d41f1f:bishop2&layout=spiral&zw=300&seq=0&cs=1&bg=ffffff&pad=4)
+[![Zebra (2+3) and bishop (<=2), 20M pieces](examples/zebra-bishop-20M.png)](https://sullerandras.github.io/red-and-black-knights/?n=20000000&teams=111111:zebra,d41f1f:bishop2&layout=spiral&zw=300&seq=0&cs=1&bg=ffffff&pad=4)
