@@ -459,55 +459,69 @@ self.onmessage = function(ev) {
     xyToPos = (x, y) => xyToZigzag(x, y, W);
   }
 
-  const occupied   = new Map();
-  const attackedBy = Array.from({length: numTeams}, () => new Set());
-  const nextPos    = new Array(numTeams).fill(0);
-  let   globalMin  = 0;
+  const nextPos = new Array(numTeams).fill(0);
+  let   globalMin = 0;
 
-  const posArr  = new Float64Array(n);
+  // Replace Map+Set with a flat Uint8Array to avoid Firefox's ~16M Map/Set entry limit.
+  // Each byte: bit 0 = occupied, bit (t+1) = attacked by team t.  Max 6 teams → 7 bits → fits Uint8.
+  let statusSize = Math.max(n * 4, 1 << 20);
+  let posStatus  = new Uint8Array(statusSize);
+
+  // Pre-compute per-team bitmasks.
+  const myBits    = Array.from({length: numTeams}, (_, t) => 1 << (t + 1));
+  const otherMasks = Array.from({length: numTeams}, (_, t) =>
+    (((1 << numTeams) - 1) << 1) & ~(1 << (t + 1)));
+
+  const xs      = new Int32Array(n);
+  const ys      = new Int32Array(n);
   const teamArr = new Uint8Array(n);
+
+  function growStatus(minIdx) {
+    let newSize = statusSize;
+    while (newSize <= minIdx) newSize *= 2;
+    const buf = new Uint8Array(newSize);
+    buf.set(posStatus);
+    posStatus  = buf;
+    statusSize = newSize;
+  }
 
   const REPORT = 25000;
   const t0 = Date.now();
 
   for (let step = 0; step < n; step++) {
-    const team = step % numTeams;
+    const team      = step % numTeams;
+    const otherMask = otherMasks[team];
+    const myBit     = myBits[team];
     let pos = sequential ? Math.max(nextPos[team], globalMin) : nextPos[team];
 
-    outer: for (;;) {
-      if (!occupied.has(pos)) {
-        for (let t = 0; t < numTeams; t++) {
-          if (t !== team && attackedBy[t].has(pos)) { pos++; continue outer; }
-        }
-        break;
-      }
+    for (;;) {
+      if (pos >= statusSize) growStatus(pos);
+      const s = posStatus[pos];
+      if (!(s & 1) && !(s & otherMask)) break;
       pos++;
     }
 
-    occupied.set(pos, team);
+    posStatus[pos] |= 1;
     nextPos[team] = pos + 1;
     if (sequential) globalMin = pos + 1;
-    posArr[step]  = pos;
     teamArr[step] = team;
 
     const [x, y] = posToXY(pos);
+    xs[step] = x;
+    ys[step] = y;
+
     for (const [dx, dy] of teamMoves[team]) {
       const ap = xyToPos(x + dx, y + dy);
-      if (ap >= 0) attackedBy[team].add(ap);
+      if (ap >= 0) {
+        if (ap >= statusSize) growStatus(ap);
+        posStatus[ap] |= myBit;
+      }
     }
 
     if (step > 0 && step % REPORT === 0) {
       const elapsed = Date.now() - t0;
       self.postMessage({ type: 'progress', done: step, total: n, elapsed });
     }
-  }
-
-  const xs = new Int32Array(n);
-  const ys = new Int32Array(n);
-  for (let i = 0; i < n; i++) {
-    const [x, y] = posToXY(posArr[i]);
-    xs[i] = x;
-    ys[i] = y;
   }
 
   self.postMessage(
