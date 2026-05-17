@@ -221,12 +221,36 @@ progress {
   background: #0d1117;
 }
 
+#mainToolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  width: 100%;
+}
+
 #info {
   font-size: 11px;
   color: #8b949e;
   min-height: 1.4em;
-  flex-shrink: 0;
+  flex: 1;
 }
+
+#btnFit {
+  padding: 4px 10px;
+  background: transparent;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+#btnFit:hover:not(:disabled) { border-color: #58a6ff; color: #58a6ff; }
+#btnFit.active { background: #1f3b5a; border-color: #58a6ff; color: #58a6ff; }
+#btnFit:disabled { opacity: 0.35; cursor: not-allowed; }
 
 #canvasWrap {
   border: 1px solid #21262d;
@@ -393,7 +417,10 @@ canvas {
 </div>
 
 <div id="main">
-  <div id="info">Configure parameters and click Generate.</div>
+  <div id="mainToolbar">
+    <div id="info">Configure parameters and click Generate.</div>
+    <button id="btnFit" disabled>⊡ Fit</button>
+  </div>
   <div id="canvasWrap">
     <canvas id="canvas" width="1" height="1"></canvas>
   </div>
@@ -617,12 +644,40 @@ const layoutDesc       = document.getElementById('layoutDesc');
 const zigzagWidthField = document.getElementById('zigzagWidthField');
 const btnGenerate      = document.getElementById('btnGenerate');
 const btnExport        = document.getElementById('btnExport');
+const btnFit           = document.getElementById('btnFit');
 const progressWrap     = document.getElementById('progressWrap');
 const progressBar      = document.getElementById('progressBar');
 const progressText     = document.getElementById('progressText');
 const info             = document.getElementById('info');
 const canvas           = document.getElementById('canvas');
 const ctx              = canvas.getContext('2d');
+
+// ── Fit to window ──
+let fitMode = false;
+
+function applyFit() {
+  if (!fitMode || canvas.width <= 1) {
+    canvas.style.width  = '';
+    canvas.style.height = '';
+    return;
+  }
+  const main    = document.getElementById('main');
+  const toolbar = document.getElementById('mainToolbar');
+  const availW  = main.clientWidth  - 40;
+  const availH  = main.clientHeight - toolbar.offsetHeight - 30;
+  const scale   = Math.min(1, availW / canvas.width, availH / canvas.height);
+  canvas.style.width  = Math.round(canvas.width  * scale) + 'px';
+  canvas.style.height = Math.round(canvas.height * scale) + 'px';
+}
+
+btnFit.addEventListener('click', () => {
+  fitMode = !fitMode;
+  btnFit.classList.toggle('active', fitMode);
+  btnFit.textContent = fitMode ? '⊡ 1:1' : '⊡ Fit';
+  applyFit();
+});
+
+window.addEventListener('resize', applyFit);
 
 // ── Team rows (color + piece type per team) ──
 function rebuildTeams(n, initData) {
@@ -869,6 +924,8 @@ function render(msg, n, numTeams, layout) {
   info.textContent =
     `${n.toLocaleString()} pieces · ${W}×${H} px · computed in ${fmtMs(elapsed)}`;
   btnExport.disabled = false;
+  btnFit.disabled = false;
+  applyFit();
 }
 
 // ── Export ──
