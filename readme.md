@@ -35,7 +35,7 @@ Teams take turns placing pieces. Each piece lands on the lowest-numbered unoccup
 
 [![Leaper and queen, zigzag 447 with 300k pieces](examples/leaper-queen-zigzag447-300000.png)](https://sullerandras.github.io/red-and-black-knights/?n=300000&teams=111111:leaper34,d41f1f:queen2&layout=zigzag&zw=447&seq=0&cs=1&bg=ffffff&pad=4)
 
-**Zebra (2+3) and bishop (<=2), 1M pieces**
+**Zebra (2+3) and bishop (<=2), 20M pieces**
 
 The black regions are all connected!
 
