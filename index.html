@@ -267,6 +267,10 @@ canvas {
 }
 
 /* ── Gallery ── */
+.gal-axes-row { display: flex; align-items: center; gap: 6px; }
+.gal-axis-label { font-size: 11px; color: #8b949e; white-space: nowrap; flex-shrink: 0; }
+.gal-axes-row select { flex: 1; }
+
 #gallerySection { display: none; flex-direction: column; gap: 10px; width: 100%; }
 #gallerySection.show { display: flex; }
 #galleryStatus { font-size: 11px; color: #8b949e; min-height: 1.4em; }
@@ -410,6 +414,15 @@ canvas {
   <div class="field">
     <span class="field-label">Gallery N (per thumbnail)</span>
     <input type="number" id="galleryN" min="1000" max="500000" value="20000">
+  </div>
+  <div class="field">
+    <span class="field-label">Gallery axes</span>
+    <div class="gal-axes-row">
+      <span class="gal-axis-label">Rows</span>
+      <select id="galRowTeam"></select>
+      <span class="gal-axis-label">Cols</span>
+      <select id="galColTeam"></select>
+    </div>
   </div>
   <button id="btnGallery">▦ Gallery</button>
 
@@ -580,7 +593,7 @@ self.onmessage = function(ev) {
 // ─────────────────────────────────────────────
 //  Main app
 // ─────────────────────────────────────────────
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 
 const DEFAULT_COLORS = ['#111111','#d41f1f','#1f6ad4','#1db84a','#9b1fd4','#e07b1f'];
 
@@ -753,9 +766,29 @@ function rebuildTeams(n, initData) {
     teamsWrap.appendChild(container);
   }
 }
-numTeamsEl.addEventListener('change', () => { rebuildTeams(+numTeamsEl.value); updateURL(); });
+function rebuildGalTeamSelects() {
+  const n = +numTeamsEl.value;
+  const rowSel = document.getElementById('galRowTeam');
+  const colSel = document.getElementById('galColTeam');
+  const prevRow = rowSel.value !== '' ? Math.min(+rowSel.value, n - 1) : 0;
+  const prevCol = colSel.value !== '' ? Math.min(+colSel.value, n - 1) : Math.min(1, n - 1);
+  for (const sel of [rowSel, colSel]) {
+    sel.innerHTML = '';
+    for (let i = 0; i < n; i++) {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `T${i + 1}`;
+      sel.appendChild(opt);
+    }
+  }
+  rowSel.value = prevRow;
+  colSel.value = prevCol;
+}
+
+numTeamsEl.addEventListener('change', () => { rebuildTeams(+numTeamsEl.value); rebuildGalTeamSelects(); updateURL(); });
 const hasParams = readParams();
 if (!hasParams) rebuildTeams(2);
+rebuildGalTeamSelects();
 
 // ── Compute move set for a team from current UI state ──
 function getTeamMoves(i) {
@@ -1127,16 +1160,18 @@ document.getElementById('btnGallery').addEventListener('click', async function()
   const galN=Math.max(1000,Math.min(500000,+document.getElementById('galleryN').value||20000));
   const bgHex=document.getElementById('bgColor').value;
   const colors=Array.from({length:numTeams},(_,i)=>document.getElementById(`tc${i}`)?.value||DEFAULT_COLORS[i]);
+  const rowTeam=+document.getElementById('galRowTeam').value;
+  const colTeam=+document.getElementById('galColTeam').value;
 
-  // All named piece types (rows = T1, cols = T2, T3+ stay fixed at current)
+  // All named piece types (rows = rowTeam, cols = colTeam, others stay fixed)
   const pt=PIECES.filter(p=>p.value!=='custom');
 
   const combos=[];
   for(const rp of pt){
     for(const cp of pt){
       const pieceValues=Array.from({length:numTeams},(_,t)=>{
-        if(t===0) return rp.value;
-        if(t===1) return cp.value;
+        if(t===rowTeam) return rp.value;
+        if(t===colTeam) return cp.value;
         return document.getElementById(`pc${t}`)?.value||'knight';
       });
       const teamMoves=pieceValues.map(pv=>{
@@ -1157,7 +1192,7 @@ document.getElementById('btnGallery').addEventListener('click', async function()
   galGrid.innerHTML='';
   galGrid.style.gridTemplateColumns=`60px repeat(${pt.length},96px)`;
 
-  // Header row: empty corner + column (T2) labels
+  // Header row: empty corner + column labels
   galGrid.appendChild(document.createElement('div'));
   for(const cp of pt){
     const hdr=document.createElement('div');
@@ -1166,7 +1201,7 @@ document.getElementById('btnGallery').addEventListener('click', async function()
     galGrid.appendChild(hdr);
   }
 
-  // Data rows: row (T1) label + cells
+  // Data rows: row label + cells
   for(let ri=0;ri<pt.length;ri++){
     const rp=pt[ri];
     const rowLbl=document.createElement('div');
@@ -1181,7 +1216,7 @@ document.getElementById('btnGallery').addEventListener('click', async function()
       tc.width=96; tc.height=96;
       const tip=document.createElement('div');
       tip.className='gal-cell-tip';
-      tip.textContent=`T1: ${shortName(combo.rp.label)}\nT2: ${shortName(combo.cp.label)}`;
+      tip.textContent=`T${rowTeam+1}: ${shortName(combo.rp.label)}\nT${colTeam+1}: ${shortName(combo.cp.label)}`;
       cell.append(tc,tip);
       cell.addEventListener('click',()=>{
         for(let t=0;t<numTeams;t++){
@@ -1208,7 +1243,7 @@ document.getElementById('btnGallery').addEventListener('click', async function()
         const pctx=pc.getContext('2d');
         pctx.imageSmoothingEnabled=false;
         pctx.drawImage(combo.offBitmap,0,0,W,H,0,0,dw,dh);
-        lbl.textContent=`T1: ${shortName(combo.rp.label)} · T2: ${shortName(combo.cp.label)}`;
+        lbl.textContent=`T${rowTeam+1}: ${shortName(combo.rp.label)} · T${colTeam+1}: ${shortName(combo.cp.label)}`;
         const rect=cell.getBoundingClientRect();
         const pw=dw+14, ph=dh+34;
         let left=rect.right+8;
