@@ -49,9 +49,20 @@ body {
   letter-spacing: 0.5px;
 }
 
-.n-row { display: flex; gap: 6px; align-items: center; }
-.n-row input[type=range] { flex: 1; accent-color: #58a6ff; cursor: pointer; }
-.n-row input[type=number] { width: 82px; }
+.n-row { display: flex; flex-direction: column; gap: 5px; }
+.n-row input[type=number] { width: 100%; }
+.n-presets { display: flex; flex-wrap: wrap; gap: 4px; }
+.n-preset {
+  padding: 3px 7px;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  color: #8b949e;
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.n-preset:hover { border-color: #58a6ff; color: #58a6ff; }
 
 input[type=number], select {
   padding: 5px 8px;
@@ -279,8 +290,16 @@ canvas {
   <div class="field">
     <span class="field-label">Pieces (N)</span>
     <div class="n-row">
-      <input type="range" id="nRange" min="100" max="500000" step="100" value="500000">
-      <input type="number" id="nNum" min="100" max="10000000" value="500000">
+      <input type="number" id="nNum" min="100" max="100000000" value="500000">
+      <div class="n-presets">
+        <button class="n-preset" data-n="10000">10K</button>
+        <button class="n-preset" data-n="100000">100K</button>
+        <button class="n-preset" data-n="500000">500K</button>
+        <button class="n-preset" data-n="1000000">1M</button>
+        <button class="n-preset" data-n="5000000">5M</button>
+        <button class="n-preset" data-n="10000000">10M</button>
+        <button class="n-preset" data-n="50000000">50M</button>
+      </div>
     </div>
   </div>
 
@@ -592,7 +611,6 @@ const PIECES = [
 // ── DOM refs ──
 const numTeamsEl       = document.getElementById('numTeams');
 const teamsWrap        = document.getElementById('teamsWrap');
-const nRange           = document.getElementById('nRange');
 const nNum             = document.getElementById('nNum');
 const layoutEl         = document.getElementById('layout');
 const layoutDesc       = document.getElementById('layoutDesc');
@@ -695,11 +713,12 @@ function getTeamMoves(i) {
 }
 
 // ── N sync ──
-nRange.addEventListener('input', () => { nNum.value = nRange.value; updateURL(); });
-nNum.addEventListener('input', () => {
-  const v = Math.max(100, Math.min(10_000_000, +nNum.value || 100));
-  nRange.value = Math.min(v, 500_000);
-  updateURL();
+nNum.addEventListener('input', updateURL);
+document.querySelectorAll('.n-preset').forEach(btn => {
+  btn.addEventListener('click', () => {
+    nNum.value = btn.dataset.n;
+    updateURL();
+  });
 });
 
 // ── Layout description + zigzag width visibility ──
@@ -905,7 +924,6 @@ function readParams() {
 
   const n = Math.max(100, +p.get('n') || 500000);
   nNum.value = n;
-  nRange.value = Math.min(n, 500000);
 
   const teamEntries = (p.get('teams') || '').split(',').filter(Boolean);
   const numTeams = Math.min(6, Math.max(2, teamEntries.length || 2));
