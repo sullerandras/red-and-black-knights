@@ -657,8 +657,9 @@ let fitMode = false;
 
 function applyFit() {
   if (!fitMode || canvas.width <= 1) {
-    canvas.style.width  = '';
-    canvas.style.height = '';
+    canvas.style.width        = '';
+    canvas.style.height       = '';
+    canvas.style.imageRendering = '';
     return;
   }
   const main    = document.getElementById('main');
@@ -666,8 +667,9 @@ function applyFit() {
   const availW  = main.clientWidth  - 40;
   const availH  = main.clientHeight - toolbar.offsetHeight - 30;
   const scale   = Math.min(1, availW / canvas.width, availH / canvas.height);
-  canvas.style.width  = Math.round(canvas.width  * scale) + 'px';
-  canvas.style.height = Math.round(canvas.height * scale) + 'px';
+  canvas.style.width        = Math.round(canvas.width  * scale) + 'px';
+  canvas.style.height       = Math.round(canvas.height * scale) + 'px';
+  canvas.style.imageRendering = 'auto';
 }
 
 btnFit.addEventListener('click', () => {
