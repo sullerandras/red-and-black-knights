@@ -1196,18 +1196,18 @@ document.getElementById('btnGallery').addEventListener('click', async function()
         updateURL();
       });
       cell.addEventListener('mouseenter',()=>{
-        if(!combo.offCanvas) return;
+        if(!combo.offBitmap) return;
         const preview=document.getElementById('galPreview');
         const pc=document.getElementById('galPreviewCanvas');
         const lbl=document.getElementById('galPreviewLabel');
-        const W=combo.offCanvas.width, H=combo.offCanvas.height;
+        const W=combo.offBitmap.width, H=combo.offBitmap.height;
         const maxSize=350;
         const scale=maxSize/Math.max(W,H);
         const dw=Math.round(W*scale), dh=Math.round(H*scale);
         pc.width=dw; pc.height=dh;
         const pctx=pc.getContext('2d');
         pctx.imageSmoothingEnabled=false;
-        pctx.drawImage(combo.offCanvas,0,0,W,H,0,0,dw,dh);
+        pctx.drawImage(combo.offBitmap,0,0,W,H,0,0,dw,dh);
         lbl.textContent=`T1: ${shortName(combo.rp.label)} · T2: ${shortName(combo.cp.label)}`;
         const rect=cell.getBoundingClientRect();
         const pw=dw+14, ph=dh+34;
@@ -1237,7 +1237,8 @@ document.getElementById('btnGallery').addEventListener('click', async function()
     try{
       const msg=await startGalleryWorker(galN,numTeams,layout,zigzagWidth,sequential,combo.teamMoves);
       if(!galAbort){
-        combo.offCanvas=renderThumbToCanvas(combo.thumbCanvas,msg,colors,layout,bgHex);
+        const offCanvas=renderThumbToCanvas(combo.thumbCanvas,msg,colors,layout,bgHex);
+        if(offCanvas) combo.offBitmap=await createImageBitmap(offCanvas);
         doneCount++;
         galStatus.textContent=`${doneCount}/${combos.length} thumbnails ready`;
       }
