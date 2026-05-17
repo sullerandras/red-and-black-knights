@@ -274,7 +274,7 @@ canvas {
 .gal-col-hdr {
   font-size: 9px; color: #6e7681; text-align: center;
   writing-mode: vertical-rl; transform: rotate(180deg);
-  overflow: hidden; white-space: nowrap; max-height: 72px; align-self: end;
+  overflow: hidden; white-space: nowrap; max-height: 96px; align-self: end;
 }
 .gal-row-hdr {
   font-size: 9px; color: #6e7681; text-align: right; padding-right: 4px;
@@ -282,7 +282,7 @@ canvas {
   max-width: 60px; align-self: center;
 }
 .gal-cell {
-  width: 72px; height: 72px; position: relative;
+  width: 96px; height: 96px; position: relative;
   border: 1px solid #21262d; border-radius: 2px;
   background: #161b22; cursor: pointer; overflow: hidden;
 }
@@ -1155,7 +1155,7 @@ document.getElementById('btnGallery').addEventListener('click', async function()
 
   // Build grid: [label col] + [13 piece cols]
   galGrid.innerHTML='';
-  galGrid.style.gridTemplateColumns=`60px repeat(${pt.length},72px)`;
+  galGrid.style.gridTemplateColumns=`60px repeat(${pt.length},96px)`;
 
   // Header row: empty corner + column (T2) labels
   galGrid.appendChild(document.createElement('div'));
@@ -1178,7 +1178,7 @@ document.getElementById('btnGallery').addEventListener('click', async function()
       const cell=document.createElement('div');
       cell.className='gal-cell';
       const tc=document.createElement('canvas');
-      tc.width=72; tc.height=72;
+      tc.width=96; tc.height=96;
       const tip=document.createElement('div');
       tip.className='gal-cell-tip';
       tip.textContent=`T1: ${shortName(combo.rp.label)}\nT2: ${shortName(combo.cp.label)}`;
