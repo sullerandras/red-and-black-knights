@@ -729,6 +729,10 @@ function updateLayoutUI() {
 layoutEl.addEventListener('change', () => { updateLayoutUI(); updateURL(); });
 updateLayoutUI();
 
+document.getElementById('sidebar').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.tagName === 'INPUT') btnGenerate.click();
+});
+
 document.getElementById('sequential').addEventListener('change', updateURL);
 document.getElementById('cellSize').addEventListener('change', updateURL);
 document.getElementById('bgColor').addEventListener('input', updateURL);
